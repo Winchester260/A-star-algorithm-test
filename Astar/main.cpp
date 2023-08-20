@@ -1,46 +1,33 @@
 #include <SFML/Graphics.hpp>
-#include <vector>
 #include <iostream>
 #include <time.h>
 #include <chrono> // Für std::chrono::milliseconds
 #include <thread> // Für std::this_thread::sleep_for
 #include <list>
+#include "node.hpp"
+#include "AstarAlgorithmn.h"
 using namespace sf;
 
-Sprite w, r, g, s,astar;
-
+Sprite w, r, g, s,astar, wallSprite, treeSprite;
 int counter = 0;
-
-struct Node {
-    int x, y;
-    float g;
-    float h;
-    Node* parent;
-
-    Node(int x_ = 0, int y_ = 0, Node* p_ = nullptr)
-        : x(x_), y(y_), g(FLT_MAX), h(0), parent(p_) {}
-};
-
-
-float heuristic(Node* a, Node* b) {
-    return std::abs(a->x - b->x) + std::abs(a->y - b->y);
-}
-
-bool operator == (const Node& lhs, const Node& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
+bool newRound = false;
+int OriginaltileSize = 16; // size of the sprite
+ 
+enum tilesType{grass, water, meat,player,tree,aPath,wall };
+ 
 void drawMap(RenderWindow* win, int rows, int cols, const std::vector<std::vector<int>>& map) {
     int field = -1;
-    const int tileSize = 16; // size of the sprite
+     
     Sprite* currentSprite = nullptr;
+     
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
             field = map[i][j];
 
             switch (field)
             {
-             case 0:
+            case 0: case 5:
+
                    currentSprite = &w;
                    break;
             case 1:
@@ -48,20 +35,25 @@ void drawMap(RenderWindow* win, int rows, int cols, const std::vector<std::vecto
                 break;
             case 2:
                 currentSprite = &g;
+ 
                 break;
             case 3:
                 currentSprite = &s;
                 break;
-            case 5:
-                currentSprite = &astar;
+            case 4:
+                currentSprite = &treeSprite;
+                break;
+ 
+            case 6:
+                currentSprite = &wallSprite;
                 break;
             default:
                 break;
             }
 
- 
+            currentSprite->setScale(3, 3);
             // set the position of the current sprite to the indices of loop and the title size
-            currentSprite->setPosition(j * tileSize, i * tileSize);
+            currentSprite->setPosition(j * OriginaltileSize, i * OriginaltileSize);
 
             //draw the sprite
             win->draw(*currentSprite);
@@ -70,64 +62,24 @@ void drawMap(RenderWindow* win, int rows, int cols, const std::vector<std::vecto
 
 }
 
-
-int calculatedirectionPlayer(std::vector<std::vector<int>>&map, int x, int y) {
-        //0 up , 1 down, 2 left , 3 right
-        int playerX = -1, playerY = -1;
-
-        // Finde die Position des Charakters (3) auf der Karte
-        for (int i = 0; i < map.size(); i++) {
-            for (int j = 0; j < map[i].size(); j++) {
-                if (map[i][j] == 3) {
-                    playerX = i;
-                    playerY = j;
-                    break;
-                }
-            }
-        }
-
-        // Wenn der Charakter rechts vom Ziel ist und links kein Hindernis liegt
-        if (playerX == x && playerY > y && playerY > 0 && map[playerX][playerY - 1] != 1) {
-            return 2; // Geh nach links
-        }
-
-        // Wenn der Charakter links vom Ziel ist und rechts kein Hindernis liegt
-        if (playerX == x && playerY < y && playerY < map[playerX].size() - 1 && map[playerX][playerY + 1] != 1) {
-            return 3; // Geh nach rechts
-        }
-
-        // Wenn der Charakter über dem Ziel ist und unten kein Hindernis liegt
-        if (playerX < x && playerX < map.size() - 1 && map[playerX + 1][playerY] != 1) {
-            return 1; // Geh runter
-        }
-
-        // Wenn der Charakter unter dem Ziel ist und oben kein Hindernis liegt
-        if (playerX > x && playerX > 0 && map[playerX - 1][playerY] != 1) {
-            return 0; // Geh hoch
-        }
-
-        // Wenn keine der Bedingungen erfüllt ist, gebe eine zufällige Richtung zurück
-        return rand() % 4;
-    }
-
+ 
 
 
 void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
     int swap = -1;
     int field = -1;
-    int i, j;
+    int i= 0, j=0;
     int collected = 0;
     bool placed = false;
-    
     for (i = 0; i < rows; ++i) {
         for (j = 0; j < cols; ++j) {
             field = map[i][j];
-            if (field == 3) {
+            if (field == tilesType(3)) {
                 break;
             }
 
         }
-        if (field == 3) {
+        if (field == tilesType(3)) {
             break;
         }
     }
@@ -140,8 +92,14 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
             if (swap == 1) {
                 break;
             }
+            if (swap == 4) {
+                break;
+            }
             if (swap == 2) {
                 collected = 2;
+                swap = 0;
+            }
+            if (swap == 5) {
                 swap = 0;
             }
             map[i - 1][j] = 3;
@@ -155,8 +113,14 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
             if (swap == 1) {
                 break;
             }
+            if (swap == 4) {
+                break;
+            }
             if (swap == 2) {
                 collected = 2;
+                swap = 0;
+            }
+            if (swap == 5) {
                 swap = 0;
             }
             map[i + 1][j] = 3;
@@ -171,8 +135,14 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
             if (swap == 1) {
                 break;
             }
+            if (swap == 4) {
+                break;
+            }
             if (swap == 2) {
                 collected = 2;
+                swap = 0;
+            }
+            if (swap == 5) {
                 swap = 0;
             }
             map[i][j - 1] = 3;
@@ -187,8 +157,14 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
             if (swap == 1) {
                 break;
             }
+            if (swap == 4) {
+                break;
+            }
             if (swap == 2) {
                 collected = 2;
+                swap = 0;
+            }
+            if (swap == 5) {
                 swap = 0;
             }
             map[i][j+1] = 3;
@@ -198,6 +174,10 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
     default:
         break;
     }
+
+    //update position of running guy
+    startx = i;
+    starty = j;
     if (collected == 2) {
  
         while (placed == false) {
@@ -206,7 +186,7 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
         int randomI = rand() % map.size();
         int randomJ = rand() % map[0].size();
  
-            if (map[randomI][randomJ] != 1) {
+            if (map[randomI][randomJ] != 1 && map[randomI][randomJ] != 4 && map[randomI][randomJ] != 6 &&  map[randomI][randomJ] != 3) {
                 placed = true;
                 counter++;
                 try {
@@ -223,79 +203,41 @@ void move(int dir,int rows, int cols, std::vector<std::vector<int>>& map) {
     }
 }
 
-std::list<Node> aStar(const std::vector<std::vector<int>>& map, Node start, Node end) {
+int getDirection(std::vector<std::vector<int>>& map) {
 
-    try {
-
-        std::list<Node> openList, closedList;
-
-        start.g = 0;
-        start.h = heuristic(&start, &end);
-        openList.push_back(start);
-
-        while (!openList.empty()) {
-            openList.sort([](const Node& a, const Node& b) { return a.g + a.h < b.g + b.h; });
-
-            Node current = openList.front();
-            openList.pop_front();
-
-            if (current == end) {
-                std::list<Node> path;
-                while (current.parent) {
-                    path.push_back(current);
-                    current = *current.parent;
+    // Finde die Position des Charakters (3) auf der Karte
+    for (int i = 0; i < map.size(); i++) {
+        for (int j = 0; j < map[i].size(); j++) {
+            if (map[i][j] == 3) {
+                
+                if (j > 0 && map[i][j-1] == 5 || j > 0 && map[i][j - 1] == 2) {
+                  //  std::cout << " direction left: ";
+                    return 2;
                 }
-                path.push_back(start);
-                return path;
-            }
-
-            closedList.push_back(current);
-            for (int x = -1; x <= 1; x++) {
-                for (int y = -1; y <= 1; y++) {
-                    if (x == 0 && y == 0)
-                        continue;
-
-                    int newX = current.x + x;
-                    int newY = current.y + y;
-
-                    if (newX < 0 || newX >= map.size() || newY < 0 || newY >= map[0].size() || map[newX][newY] == 1)
-                        continue;
-
-                    Node successor(newX, newY, &closedList.back());
-
-                    if (std::find(closedList.begin(), closedList.end(), successor) != closedList.end())
-                        continue;
-
-                    float tentative_g = current.g + std::sqrt(x * x + y * y);
-
-                    if (std::find(openList.begin(), openList.end(), successor) == openList.end() || tentative_g < successor.g) {
-                        successor.g = tentative_g;
-                        successor.h = heuristic(&successor, &end);
-                        successor.parent = &closedList.back();
-
-                        if (std::find(openList.begin(), openList.end(), successor) == openList.end()) {
-                            openList.push_back(successor);
-                        }
-                    }
+                if (j < map[i].size() - 1 && map[i][j+1] == 5 || j < map[i].size() - 1 && map[i][j + 1] == 2) {
+                   // std::cout << " direction right: ";
+                    return 3;
                 }
+
+ 
+                if (i > 0 && map[i-1][j] == 5 || i > 0 && map[i - 1][j] == 2) {
+                  //  std::cout << " direction up: ";
+                    return 0;
+                }
+                if (i < map.size()-1&&( map[i + 1][j] == 5) || i < map.size() - 1 && map[i + 1][j] == 2) {
+                  //  std::cout << " direction down: ";
+                    return 1;
+                }
+ 
             }
-
-
         }
-
-        return std::list<Node>();  // Kein Pfad gefunden
-
-
     }
-    catch (const std::out_of_range& e) {
-        std::cerr << "Fehler: " << e.what() << std::endl;
 
-    }
-     
+    return -1;
 }
 
 void drawNewMap(std::vector<std::vector<int>> & map, int x, int y) {
-    try {
+ 
         for (int i = 0; i < map.size(); i++) {
             for (int j = 0; j < map[0].size(); j++) {
                 if (i == x && j == y)
@@ -304,11 +246,8 @@ void drawNewMap(std::vector<std::vector<int>> & map, int x, int y) {
                 }
             }
         }
-    }
-    catch (const std::out_of_range& e) {
-        std::cerr << "Fehler: " << e.what() << std::endl;
-
-    }
+     
+ 
 }
 
 void deletePath(std::vector<std::vector<int>>& map) {
@@ -326,107 +265,108 @@ void deletePath(std::vector<std::vector<int>>& map) {
  
 }
  
-
 int main() {
-    
-    int rows = 18;
-    int column = 37;
-    int height = 16 * rows;
-    int width = 16 * column;
+    int scale = 3;
+    OriginaltileSize = OriginaltileSize * scale;
+    const int rows = 12;
+    const int column = 16;
+    int height = OriginaltileSize * rows;
+    int width = OriginaltileSize * column;
     int dir = -1;
     int fps = 0;
+     
     srand(time(NULL));
+    RenderWindow window(VideoMode(width, height), "A-star Algorithm", Style::Titlebar | Style::Close);
+    sf::Event event;
+     
 
-    //2D Map
-    std::vector<std::vector<int>> map = {
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0},
-        {0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
-    };
-
-
-	RenderWindow window(VideoMode(width, height), "A-star Algorithm", Style::Titlebar | Style::Close);
-    
     //Textures
-    Texture white, red, goal,start,road;
-    white.loadFromFile("images/white.png");
-    red.loadFromFile("images/red.png");
+    Texture white, red, goal, start, road, wall,tree;
+    tree.loadFromFile("images/tree.png");
+    wall.loadFromFile("images/wall.png");
+    white.loadFromFile("images/grass.png");
+    red.loadFromFile("images/water.png");
     goal.loadFromFile("images/fleisch.jpg");
-    start.loadFromFile("images/luffy.jpg");
+    start.loadFromFile("images/l4.png");
     road.loadFromFile("images/green.png");
     //Sprites
+    wallSprite.setTexture(wall);
     w.setTexture(white);
     r.setTexture(red);
     g.setTexture(goal);
     s.setTexture(start);
-    astar.setTexture(road);
-    
  
-    Node begin, end;
+    treeSprite.setTexture(tree);
+ 
+ 
+ 
 
+    //2D Map 16x12
+    std::vector<std::vector<int>> map2 = {
+        {6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6},
+        {6,0,1,1,1,1,1,0,0,0,1,1,0,0,0,6},
+        {6,0,1,1,0,1,1,0,0,0,1,1,0,1,1,6},
+        {6,0,1,0,0,0,1,0,0,0,0,3,0,1,1,6},
+        {6,0,1,0,0,0,1,0,0,0,0,0,0,0,0,6},
+        {6,0,1,0,0,0,1,0,0,0,0,0,0,0,0,6},
+        {6,2,0,0,0,0,0,0,0,0,0,0,0,4,4,6},
+        {6,0,1,0,0,0,1,0,0,0,0,0,0,4,4,6},
+        {6,0,1,0,0,0,1,0,0,0,0,0,0,0,0,6},
+        {6,0,1,1,0,1,1,0,0,0,0,0,1,1,0,6},
+        {6,0,1,1,0,1,1,0,0,0,0,0,1,1,0,6},
+        {6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6},
+    };
+ 
+    //2D Map
+    std::vector<std::vector<int>> map1 = {
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,0,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,1,1,1,1,1,1,0,0,0,0},
+        {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,0,0,1,0,0,0,0,0,0,1,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,2,1,0,0,1,1,1,1,1,1,0,1,0,0,0,0},
+        {0,1,0,0,0,0,0,0,1,1,1,1,1,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0},
+        {0,1,0,0,0,0,0,0,1,0,0,0,1,0,1,0,1,1,0,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,0,0,0},
+        {0,1,1,1,1,1,1,1,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,1,1,0,0,0,0,0,1,0,1,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0},
+        {0,0,0,0,0,1,1,1,1,1,1,0,1,0,1,0,0,0,0,0,1,0,0,0,1,1,1,1,1,1,1,0,1,0,0,0,0},
+        {0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,1,1,1,1,0,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0},
+        {1,1,1,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,1,1,0,0,0,0},
+        {3,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0}
+    };
+
+ 
+    std::vector<std::vector<Node>> mapNodes(map2.size(), std::vector<Node>(map2[0].size()));
+
+ 
+ 
+    initializeMapAndNodes(map2, mapNodes);
+    setCostOnNodes(map2, mapNodes, begin, *end);
+ 
+ 
 
     // Window Loop
     while (window.isOpen())
     {
-         try {
-            for (int x = 0; x < map.size(); x++) {
-                for (int y = 0; y < map[0].size(); y++) {
-                    if (map[x][y] == 3) {
-                        begin = Node(x, y);
-
-                    }
-                    if (map[x][y] == 2) {
-                        end = Node(x, y);
-
-                    }
-                }
-            }
-
-            std::list<Node> path = aStar(map, begin, end);
-            
-            if (path.size() > 1 && fps % 600 == 1) {
-                Node n = *std::prev(path.end(), 2);
-                dir = calculatedirectionPlayer(map, n.x, n.y);
- 
-            }
-            for (const auto& node : path) {
-
-                if (node.x == begin.x && node.y == begin.y) {
-                    continue;
-                }
-                if (node.x == end.x && node.y == end.y) {
-
-                }
-                else {
- 
-                    drawNewMap(map, node.x, node.y);
-                }
-            }
-        }
-        catch (const std::out_of_range& e) {
-            std::cerr << "Fehler: " << e.what() << std::endl;
-
-        }
-        
-
         window.setTitle("A - Star Algorithm - Counter: " + std::to_string(counter));
+ 
+        //if running guy is on position of goal, then check for a new round
+         if (goalx == startx && goaly == starty) {
+             newRound = true;
+        }       
+        
+        if (newRound) {
+            newRound = false;
+            initializeMapAndNodes(map2,mapNodes);
+            setCostOnNodes(map2, mapNodes, begin, *end);
+            aStar(map2, mapNodes, begin, *end);
+        }
+ 
 
-        sf::Event event;
         while (window.pollEvent(event))
         {
             if (event.type == sf::Event::Closed)
@@ -435,51 +375,59 @@ int main() {
             // Tastaturereignisse abfangen
             if (event.type == sf::Event::KeyPressed)
             { 
-                deletePath(map);
+ 
                 switch (event.key.code)
                 {
-                    
+                 
+ 
                 case sf::Keyboard::W:
+                    newRound = false;
                     dir = 0;
+ 
+                     
                     break;
 
                 case sf::Keyboard::A:
                     dir = 2;
+    
+ 
                     break;
 
                 case sf::Keyboard::S:
+ 
                     dir = 1;
                     break;
 
                 case sf::Keyboard::D:
+ 
                     dir = 3;
                     break;
 
                 default:
+                    aStar(map2, mapNodes, begin, *end); 
                     break;
                 }
+
+                 
             }
+             
         }
          
          
          
-        if (fps % 600 == 1) {
-             
-            move(dir, map.size(), map[0].size(), map);
+        if (fps % 600 == 1) {             
+            move(dir, map2.size(), map2[0].size(), map2);
             fps = 0;
-            
-            dir = -1;
-             
-            
+            dir = getDirection(map2);
         }
+ 
         window.clear();
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-         
-        drawMap(&window, map.size() , map[0].size(), map);
-        window.display();
-        deletePath(map);
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        drawMap(&window, map2.size() , map2[0].size(), map2);
+ 
+        window.display(); 
         fps++;
     }
-
+    
 	return 0;
 }
